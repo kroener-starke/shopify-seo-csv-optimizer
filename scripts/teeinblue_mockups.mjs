@@ -59,7 +59,7 @@ export async function syncOpenCampaign(tab, {handle, campaignPath, shopHosts, pl
     throw new Error('The selected base gallery could not be verified: ' + base.name);
   }
 
-  async function saveCaption(image, caption) {
+  async function saveCaption(base, image, caption) {
     const card = page.locator('li.campaign-gallery-thumbnail[title=' + JSON.stringify(image.id) + ']')
       .filter({has: page.locator('img[src=' + JSON.stringify(image.file) + ']')});
     if (await card.count() !== 1) throw new Error('The source mockup has changed.');
@@ -100,8 +100,17 @@ export async function syncOpenCampaign(tab, {handle, campaignPath, shopHosts, pl
         .map(button => button.disabled));
       if (!pending.length) return;
       if (pending.length !== 1) throw error;
-      if (!pending[0]) await finish.press('Enter');
-      await finish.waitFor({state: 'hidden', timeoutMs: 65000});
+      if (pending[0]) {
+        await tab.reload();
+        await cards.first().waitFor({state: 'visible', timeoutMs: 25000});
+        const photos = await readGallery(base);
+        if (!photos.some(photo => photo.id === image.id && photo.file === image.file && photo.alt === caption)) {
+          throw new Error('The pending save could not be confirmed after reloading: ' + image.id);
+        }
+      } else {
+        await finish.press('Enter');
+        await finish.waitFor({state: 'hidden', timeoutMs: 65000});
+      }
     }
   }
 
@@ -125,7 +134,7 @@ export async function syncOpenCampaign(tab, {handle, campaignPath, shopHosts, pl
       }
       if (!desired.has(caption)) throw new Error('The destination caption is outside the approved plan.');
       actions.push({...item, caption});
-      if (write) await saveCaption(image, caption);
+      if (write) await saveCaption(base, image, caption);
     }
   }
   if (write && actions.length) {
