@@ -51,6 +51,43 @@ def checked_text(value, label):
     return value
 
 
+def apply_introduction(current, edits, name, version):
+    intro = checked_text(edits.get("introduction"), name)
+    escaped = html.escape(intro, quote=False)
+    old_format = f"<p>{escaped}</p>\n"
+    marked_tag = '<p class="fs-product-intro">'
+    target = old_format if version == 1 else f"{marked_tag}{escaped}</p>\n"
+    expected = edits.get("body_sha256")
+
+    if "previous_introduction" in edits:
+        previous = checked_text(edits["previous_introduction"], name)
+        if version < 2 or previous == intro:
+            raise ValueError(f"{name}: expected a different, previously marked introduction")
+        prior = f"{marked_tag}{html.escape(previous, quote=False)}</p>\n"
+        if current.startswith(prior) and digest(current) == expected:
+            return target + current[len(prior):], "replaced_copied_introductions"
+        if current.startswith(target) and digest(prior + current[len(target):]) == expected:
+            return current, None
+        raise ValueError(f"{name}: the marked introduction or original description has changed")
+
+    if current.startswith(target):
+        remainder = current[len(target):]
+        accepted = {digest(current), digest(remainder)}
+        if version >= 2:
+            accepted.add(digest(old_format + remainder))
+        if expected in accepted:
+            return current, None
+    elif version >= 2 and current.startswith(old_format):
+        remainder = current[len(old_format):]
+        if expected in {digest(current), digest(remainder)}:
+            return target + remainder, "marked_existing_introductions"
+    elif version >= 2 and current.startswith(marked_tag):
+        raise ValueError(f"{name}: explicitly identify the opening paragraph to replace")
+    elif digest(current) == expected:
+        return target + current, "introductions"
+    raise ValueError(f"{name}: original description has changed")
+
+
 def apply_plan(columns, rows, plan):
     handle = column(columns, "Handle", "URL handle")
     title = column(columns, "Title")
@@ -60,33 +97,30 @@ def apply_plan(columns, rows, plan):
     if not isinstance(plan, dict) or set(plan) - {"products", "version"} or not isinstance(plan.get("products"), dict):
         raise ValueError("expected an object containing products keyed by handle")
     version = plan.get("version", 1)
-    if type(version) is not int or version not in (1, 2):
+    if type(version) is not int or version not in (1, 2, 3):
         raise ValueError("unsupported plan version")
     counts = defaultdict(int)
     for name, edits in plan["products"].items():
-        if not isinstance(edits, dict) or not edits or set(edits) - {"introduction", "body_sha256", "brand", "expected_brand", "images"}:
+        if not isinstance(edits, dict) or not edits or set(edits) - {"introduction", "previous_introduction", "body_sha256", "brand", "expected_brand", "images"}:
             raise ValueError(f"{name}: invalid or unknown edits")
         parents = [row for row in groups.get(name, []) if row[title].strip()]
         if len(parents) != 1:
             raise ValueError(f"{name}: expected one product row, found {len(parents)}")
         parent = parents[0]
-        if "introduction" in edits or "body_sha256" in edits:
+        if {"introduction", "previous_introduction", "body_sha256"} & edits.keys():
             idx = column(columns, "Body (HTML)", "Description")
-            intro = checked_text(edits.get("introduction"), name)
-            escaped = html.escape(intro, quote=False)
-            legacy_prefix = f"<p>{escaped}</p>\n"
-            prefix = legacy_prefix if version == 1 else f'<p class="fs-product-intro">{escaped}</p>\n'
-            current = parent[idx]
-            if (version == 2 and current.startswith(legacy_prefix)
-                    and edits.get("body_sha256") in (digest(current[len(legacy_prefix):]), digest(current))):
-                parent[idx] = prefix + current[len(legacy_prefix):]
-                counts["marked_existing_introductions"] += 1
-            elif digest(current) == edits.get("body_sha256"):
-                if not current.startswith(prefix):
-                    parent[idx] = prefix + current
-                    counts["introductions"] += 1
-            elif not (current.startswith(prefix) and digest(current[len(prefix):]) == edits.get("body_sha256")):
-                raise ValueError(f"{name}: original description has changed")
+            parent[idx], change = apply_introduction(parent[idx], edits, name, version)
+            if change:
+                counts[change] += 1
+            if version == 3:
+                key = "product.metafields.custom.produkteinleitung"
+                field = column(columns, *(c for c in columns if c == key or c.endswith(f" ({key})")))
+                desired = edits["introduction"]
+                if parent[field] not in ("", desired, edits.get("previous_introduction")):
+                    raise ValueError(f"{name}: the saved product introduction has changed")
+                if parent[field] != desired:
+                    parent[field] = desired
+                    counts["saved_introduction_fields"] += 1
         if "brand" in edits or "expected_brand" in edits:
             keys = [key for key in columns if key == "product.metafields.custom.produktmarke" or key.endswith(" (product.metafields.custom.produktmarke)")]
             idx = column(columns, *keys)

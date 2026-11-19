@@ -3,6 +3,7 @@
 import re
 import unicodedata
 from collections import Counter, defaultdict
+from html import unescape
 from html.parser import HTMLParser
 
 
@@ -75,11 +76,21 @@ def review_descriptions(products):
     openings = {}
     opening_frequency = Counter()
     empty = []
+    saved_intro_review = {}
     for row in products:
         handle = row.get("Handle") or row.get("URL handle")
         if not handle:
             continue
         markup = row.get("Body (HTML)", row.get("Description", ""))
+        field = "product.metafields.custom.produkteinleitung"
+        saved = next((value for key, value in row.items()
+                      if key == field or key.endswith(f" ({field})")), "")
+        if saved:
+            first = re.match(r'\s*<p class="fs-product-intro">(.*?)</p\s*>', markup, re.I | re.S)
+            if not first:
+                saved_intro_review[handle] = {"handle": handle, "reason": "restore saved product introduction"}
+            elif unescape(first[1]).strip() != saved.strip():
+                saved_intro_review[handle] = {"handle": handle, "reason": "marked opening and saved introduction differ"}
         tokens = words(markup)
         if not tokens:
             empty.append(handle)
@@ -101,6 +112,8 @@ def review_descriptions(products):
     already_distinct = []
     for tokens, handles in full.items():
         for handle in handles:
+            if handle in saved_intro_review:
+                continue
             if len(handles) > 1:
                 # All exact copies stay visible for editorial review, including a copied lead.
                 rows.append({"handle": handle, "reason": "same visible description",
@@ -127,6 +140,7 @@ def review_descriptions(products):
                     rows.append({"handle": handle, "reason": "similar description",
                                  "example": example, "four_word_jaccard": score})
                     break
+    rows.extend(saved_intro_review.values())
     return {"review": sorted(rows, key=lambda row: row["handle"]),
             "exact_groups": [handles for handles in full.values() if len(handles) > 1],
             "distinct_openings_on_shared_copy": sorted(already_distinct),

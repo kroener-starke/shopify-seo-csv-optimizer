@@ -70,6 +70,29 @@ class CatalogContentTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 apply_plan(self.cols, self.rows, plan)
 
+    def test_migration_from_fresh_export_is_repeatable(self):
+        apply_plan(self.cols, self.rows, self.plan)
+        self.plan["version"] = 2
+        self.plan["products"]["a"]["body_sha256"] = digest(self.rows[0][2])
+        self.assertEqual(apply_plan(self.cols, self.rows, self.plan), {"marked_existing_introductions": 1})
+        self.assertEqual(apply_plan(self.cols, self.rows, self.plan), {})
+
+    def test_new_design_can_replace_only_its_copied_marked_intro(self):
+        self.plan["version"] = 2
+        apply_plan(self.cols, self.rows, self.plan)
+        cloned = self.rows[0][2]
+        replacement = {"version": 2, "products": {"a": {
+            "body_sha256": digest(cloned), "introduction": "Das neue Motiv zeigt C."}}}
+        with self.assertRaisesRegex(ValueError, "explicitly identify"):
+            apply_plan(self.cols, self.rows, replacement)
+        replacement["products"]["a"]["previous_introduction"] = "Motiv A & B"
+        self.assertEqual(apply_plan(self.cols, self.rows, replacement), {"replaced_copied_introductions": 1})
+        self.assertEqual(self.rows[0][2], '<p class="fs-product-intro">Das neue Motiv zeigt C.</p>\n' + self.html)
+        self.assertEqual(apply_plan(self.cols, self.rows, replacement), {})
+        self.rows[0][2] += " Änderung im Shop"
+        with self.assertRaisesRegex(ValueError, "original description has changed"):
+            apply_plan(self.cols, self.rows, replacement)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -261,7 +261,8 @@ def render_audit_markdown(data: dict[str, object]) -> str:
     if data["description_review"]["review"]:
         lines.extend(["### Product descriptions to compare", ""])
         for item in data["description_review"]["review"]:
-            lines.append(f"- `{item['handle']}` — {item['reason']} (compare `{item['example']}`).")
+            example = f" (compare `{item['example']}`)" if item.get("example") else ""
+            lines.append(f"- `{item['handle']}` — {item['reason']}{example}.")
         lines.append("")
 
     for label, key in [

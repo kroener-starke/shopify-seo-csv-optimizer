@@ -60,3 +60,23 @@ class DescriptionReviewTest(unittest.TestCase):
         self.assertEqual([r["handle"] for r in review], ["one", "two"])
         self.assertTrue(all(r["four_word_jaccard"] >= .85 for r in review))
         self.assertEqual(review_descriptions(rows[:1])["review"], [])
+
+    def test_familysurprise_field_survives_republication_and_recovers_the_body(self):
+        field = "Produkteinleitung (product.metafields.custom.produkteinleitung)"
+        self.cols.append(field)
+        for row in self.rows:
+            row.append("")
+        text = "Das Rostmotiv passt zu Fans alter Fahrzeuge."
+        plan = {"version": 3, "products": {"rost": {"introduction": text, "body_sha256": digest(self.body)}}}
+        self.assertEqual(apply_plan(self.cols, self.rows, plan), {"introductions": 1, "saved_introduction_fields": 1})
+        complete = self.rows[0][2]
+        self.assertEqual(self.rows[0][-1], text)
+        self.assertEqual(apply_plan(self.cols, self.rows, plan), {})
+        self.rows[0][2] = self.body
+        finding = next(r for r in self.audit()["review"] if r["handle"] == "rost")
+        self.assertEqual(finding["reason"], "restore saved product introduction")
+        self.assertEqual(apply_plan(self.cols, self.rows, plan), {"introductions": 1})
+        self.assertEqual(self.rows[0][2], complete)
+        self.rows[0][-1] = "Ein unabhängig bearbeiteter Text."
+        with self.assertRaisesRegex(ValueError, "saved product introduction has changed"):
+            apply_plan(self.cols, self.rows, plan)
