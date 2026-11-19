@@ -1,6 +1,6 @@
 ---
 name: shopify-seo-csv-optimizer
-description: Safely audit, improve, and validate Shopify product CSV exports for SEO content. Use when Codex needs to work on Shopify product CSV files for FamilySurprise or similar shops, especially to generate or improve SEO Title, SEO Description, and Image Alt Text while preserving all operational, variant, pricing, inventory, metafield, and Shopify structure fields. Also use when checking empty product descriptions in Body (HTML), deciding whether to inspect product image URLs for precise alt text, or creating an upload-ready duplicate CSV with a change report.
+description: Audit and improve Shopify product CSVs for SEO. Generate titles, descriptions and image alt text. When requested, differentiate existing product copy with fact-based introductions and set the FamilySurprise public product brand. Validate every cell against the approved edits while preserving variants and supplier data.
 ---
 
 # Shopify SEO CSV Optimizer
@@ -11,6 +11,8 @@ description: Safely audit, improve, and validate Shopify product CSV exports for
    - Run `scripts/shopify_csv_guard.py audit <csv> --output <report.md>`.
    - Report product count, row count, missing SEO fields, missing/duplicated alt text, empty `Body (HTML)`, drafts, B2B products, and excluded-search tags.
    - Explain that Shopify product exports can have multiple rows per product because variants/images share a `Handle`.
+
+For approved changes to existing descriptions, current image captions or FamilySurprise product brands, use [the product content workflow](references/catalog-content.md). It supports verification against an explicit plan and the fresh export. Existing authorization covers the choices the user has already made.
 
 2. Ask before changing anything outside the default editable fields.
    - Ask all required workflow questions together immediately after the audit, so the user can answer once and the optimization can then run uninterrupted.

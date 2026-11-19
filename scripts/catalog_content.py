@@ -1,0 +1,145 @@
+"""Apply or verify approved introductions, a dedicated brand field and image captions."""
+
+import argparse
+import csv
+import hashlib
+import html
+import json
+import os
+import tempfile
+from collections import defaultdict
+from pathlib import Path
+
+
+def digest(value):
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def unique_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate plan key {key!r}")
+        result[key] = value
+    return result
+
+
+def read_table(path):
+    with path.open(encoding="utf-8-sig", newline="") as stream:
+        reader = csv.reader(stream, strict=True)
+        columns = next(reader, [])
+        if not columns or len(set(columns)) != len(columns):
+            raise ValueError("missing or duplicate column headers")
+        rows = list(reader)
+    if any(len(row) != len(columns) for row in rows):
+        raise ValueError("row width differs from header")
+    return columns, rows
+
+
+def column(columns, *names):
+    hits = [i for i, name in enumerate(columns) if name in names]
+    if len(hits) != 1:
+        raise ValueError(f"expected exactly one column from {names}")
+    return hits[0]
+
+
+def checked_text(value, label):
+    if not isinstance(value, str) or not value.strip() or value != value.strip():
+        raise ValueError(f"{label}: expected nonempty plain text")
+    if any(ord(char) < 32 for char in value):
+        raise ValueError(f"{label}: unexpected control character")
+    return value
+
+
+def apply_plan(columns, rows, plan):
+    handle = column(columns, "Handle", "URL handle")
+    title = column(columns, "Title")
+    groups = defaultdict(list)
+    for row in rows:
+        groups[row[handle]].append(row)
+    if not isinstance(plan, dict) or set(plan) != {"products"} or not isinstance(plan["products"], dict):
+        raise ValueError("expected an object containing products keyed by handle")
+    counts = defaultdict(int)
+    for name, edits in plan["products"].items():
+        if not isinstance(edits, dict) or not edits or set(edits) - {"introduction", "body_sha256", "brand", "expected_brand", "images"}:
+            raise ValueError(f"{name}: invalid or unknown edits")
+        parents = [row for row in groups.get(name, []) if row[title].strip()]
+        if len(parents) != 1:
+            raise ValueError(f"{name}: expected one product row, found {len(parents)}")
+        parent = parents[0]
+        if "introduction" in edits or "body_sha256" in edits:
+            idx = column(columns, "Body (HTML)", "Description")
+            intro = checked_text(edits.get("introduction"), name)
+            prefix = f"<p>{html.escape(intro, quote=False)}</p>\n"
+            current = parent[idx]
+            if digest(current) == edits.get("body_sha256"):
+                parent[idx] = prefix + current
+                counts["introductions"] += 1
+            elif not (current.startswith(prefix) and digest(current[len(prefix):]) == edits.get("body_sha256")):
+                raise ValueError(f"{name}: original description has changed")
+        if "brand" in edits or "expected_brand" in edits:
+            keys = [key for key in columns if key == "product.metafields.custom.produktmarke" or key.endswith(" (product.metafields.custom.produktmarke)")]
+            idx = column(columns, *keys)
+            value = checked_text(edits.get("brand"), name)
+            if "expected_brand" not in edits or parent[idx] not in (edits["expected_brand"], value):
+                raise ValueError(f"{name}: brand source has changed")
+            if parent[idx] != value:
+                parent[idx] = value
+                counts["brands"] += 1
+        if "images" in edits:
+            src = column(columns, "Image Src", "Product image URL")
+            alt = column(columns, "Image Alt Text", "Image alt text")
+            images = edits["images"]
+            if not isinstance(images, dict):
+                raise ValueError(f"{name}: images must be keyed by the current media URL")
+            for url, edit in images.items():
+                if not url or not isinstance(edit, dict) or set(edit) != {"expected_alt", "alt"}:
+                    raise ValueError(f"{name}: malformed image edit")
+                matches = [row for row in groups[name] if row[src] == url]
+                if len(matches) != 1:
+                    raise ValueError(f"{name}: missing or ambiguous media URL {url}")
+                row = matches[0]
+                value = checked_text(edit["alt"], name)
+                if row[alt] not in (edit["expected_alt"], value):
+                    raise ValueError(f"{name}: image caption has changed for {url}")
+                if row[alt] != value:
+                    row[alt] = value
+                    counts["image_captions"] += 1
+    return dict(counts)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("source", type=Path)
+    parser.add_argument("plan", type=Path)
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--output", type=Path)
+    action.add_argument("--verify", type=Path)
+    args = parser.parse_args()
+    columns, rows = read_table(args.source)
+    plan = json.loads(args.plan.read_text(encoding="utf-8"), object_pairs_hook=unique_keys)
+    counts = apply_plan(columns, rows, plan)
+    if args.verify:
+        if read_table(args.verify) != (columns, rows):
+            raise ValueError("output differs from the authorized plan or contains unrelated edits")
+    else:
+        if args.output.resolve() == args.source.resolve():
+            raise ValueError("output must be a separate file")
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", dir=args.output.parent, delete=False) as temp:
+            tmp = Path(temp.name)
+            try:
+                writer = csv.writer(temp)
+                writer.writerow(columns)
+                writer.writerows(rows)
+                temp.close()
+                os.link(tmp, args.output)  # Fail safely if another process has created the destination.
+            finally:
+                tmp.unlink(missing_ok=True)
+    print(json.dumps({"rows": len(rows), "products_in_plan": len(plan["products"]), "changed": counts}))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, csv.Error) as exc:
+        raise SystemExit(str(exc)) from exc
