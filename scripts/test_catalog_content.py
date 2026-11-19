@@ -1,7 +1,12 @@
 import copy
+import csv
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from catalog_content import apply_plan, digest
+from catalog_content import apply_plan, digest, main
 
 
 class CatalogContentTest(unittest.TestCase):
@@ -33,6 +38,21 @@ class CatalogContentTest(unittest.TestCase):
                 rows = copy.deepcopy(self.rows)
                 rows[0][field] = value
                 apply_plan(self.cols, rows, self.plan)
+
+    def test_verify_rejects_brand_in_title_column(self):
+        candidate = copy.deepcopy(self.rows)
+        apply_plan(self.cols, candidate, self.plan)
+        candidate[0][self.cols.index("Title")] = "FamilySurprise"
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            source, changed, plan = (directory / name for name in ("source.csv", "changed.csv", "plan.json"))
+            for path, rows in ((source, self.rows), (changed, candidate)):
+                with path.open("w", encoding="utf-8", newline="") as stream:
+                    csv.writer(stream).writerows([self.cols, *rows])
+            plan.write_text(json.dumps(self.plan), encoding="utf-8")
+            with patch("sys.argv", ["catalog_content", str(source), str(plan), "--verify", str(changed)]):
+                with self.assertRaisesRegex(ValueError, "unrelated edits"):
+                    main()
 
     def test_unknown_fields_and_missing_product_refused(self):
         for plan in ({"products": {"a": {"Vendor": "Other"}}}, {"products": {"gone": {"brand": "x"}}}):

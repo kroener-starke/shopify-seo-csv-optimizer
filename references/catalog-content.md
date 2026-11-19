@@ -36,4 +36,6 @@ The command prepends an escaped paragraph and checks the original body, caption 
 
 Check the Shopify import preview for the actual options, variants and prices. If a product with priced size variants previews as a free default variant, cancel the import and edit those existing records through the admin.
 
-For a live rollout, use current product and media identifiers, recheck source values before applying changes, and compare the saved values afterward. Adding a channel in Shopify and acceptance by its catalog are separate checks. For a brand change, inspect the rendered Product or ProductGroup structured data and the receiving catalogs. A CSV export alone cannot confirm any of those outcomes.
+For a live rollout, use current product and media IDs and write only the fields named in the plan. A bulk grid can send an edit to a different column when focus moves. Use a field-specific action for catalog-wide changes. After saving, compare every original product title by ID, then verify variant IDs, options, prices, SKUs, supplier values and image associations against the export. Look up the saved brand metafield on each product as well. A storefront fallback can display the expected brand even when the stored field is empty.
+
+Check the rendered Product or ProductGroup structured data and each channel’s brand mapping. Check Shopify channel publication and the receiving catalog’s acceptance separately.
