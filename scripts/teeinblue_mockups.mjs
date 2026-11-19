@@ -95,11 +95,13 @@ export async function syncOpenCampaign(tab, {handle, campaignPath, shopHosts, pl
     try {
       await finish.waitFor({state: 'hidden', timeoutMs: 18000});
     } catch (error) {
-      const enabled = await page.evaluate(() => [...document.querySelectorAll('button')]
-        .filter(button => button.textContent.trim() === 'Save & Close' && button.getClientRects().length && !button.disabled).length);
-      if (enabled !== 1) throw error;
-      await finish.press('Enter');
-      await finish.waitFor({state: 'hidden', timeoutMs: 25000});
+      const pending = await page.evaluate(() => [...document.querySelectorAll('button')]
+        .filter(button => button.textContent.trim() === 'Save & Close' && button.getClientRects().length)
+        .map(button => button.disabled));
+      if (!pending.length) return;
+      if (pending.length !== 1) throw error;
+      if (!pending[0]) await finish.press('Enter');
+      await finish.waitFor({state: 'hidden', timeoutMs: 65000});
     }
   }
 

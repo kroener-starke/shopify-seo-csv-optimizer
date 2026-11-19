@@ -12,6 +12,8 @@ For an authorized live rollout, apply the plan using the merchant's existing sig
 
 When an old caption is missing or ambiguous, identify the exact native mockup and matching Shopify media. Supply `matches[basePath][mockupID] = {shopifyUrl, sourceUrl}` only after verifying that association. Keep an unresolved image for follow-up when the two images cannot be matched. Teeinblue’s thumbnail captions can also come from the product base name. The FamilySurprise theme uses the approved Shopify caption for thumbnails whose upload ID matches the current product’s original photo. Verify a photo of the product and a size chart separately when a gallery has both.
 
+If the campaign name, the printed design and the proposed caption disagree, open the original mockup and the published Shopify photo side by side. A mockup can be an undecorated background with the artwork applied later. For a caption shared between the two, describe what both images actually show. Use the product view or setting to distinguish photos. For example, a white money box can be shown on a wooden surface in one image and against a white background in another. After an interrupted save, reload the campaign and compare the current caption before trying again.
+
 The skill authors the wording and builds the plan. The Python audit itself reports candidates. A run updates a separate CSV, and publishing changes to Shopify is a separate action.
 
 Create a JSON plan keyed by the exact current handle. Each product can contain any combination of the three kinds of edit shown below. Obtain the lowercase SHA-256 digest from the UTF-8 bytes of the original description cell.
