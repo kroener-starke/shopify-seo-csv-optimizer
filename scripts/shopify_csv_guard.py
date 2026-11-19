@@ -9,6 +9,7 @@ import csv
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 
@@ -146,6 +147,17 @@ def audit_data(path: Path) -> dict[str, object]:
         for row in image_rows
         if not nonempty(row.get("Image Alt Text", ""))
     ]
+    image_alt_review = []
+    for row_number, row in enumerate(rows, start=2):
+        if not nonempty(row.get("Image Src", "")):
+            continue
+        current_alt = row.get("Image Alt Text", "")
+        reason = weak_alt_text_reason(current_alt) if nonempty(current_alt) else "missing caption"
+        if reason:
+            image_alt_review.append({
+                "row": row_number, "handle": row.get("Handle", ""), "url": row["Image Src"],
+                "current_alt": current_alt, "reason": reason,
+            })
     status_counts = collections.Counter(row.get("Status", "") for row in products)
     published_counts = collections.Counter(row.get("Published", "") for row in products)
     vendor_counts = collections.Counter(row.get("Vendor", "") for row in products)
@@ -176,6 +188,7 @@ def audit_data(path: Path) -> dict[str, object]:
         "row_count": len(rows),
         "product_count": len(groups),
         "image_row_count": len(image_rows),
+        "image_alt_review": image_alt_review,
         "missing": {
             "seo_title_products": missing_seo_title,
             "seo_description_products": missing_seo_description,
@@ -229,6 +242,7 @@ def render_audit_markdown(data: dict[str, object]) -> str:
         f"- Products missing `SEO Description`: {len(missing['seo_description_products'])}",
         f"- Products with empty `Body (HTML)`: {len(missing['body_html_products'])}",
         f"- Image rows missing `Image Alt Text`: {missing['image_alt_text_rows']}",
+        f"- Images flagged for caption review (including missing captions): {len(data['image_alt_review'])}",
         "",
         "## Product Groups Needing Decisions",
         "",
@@ -300,15 +314,23 @@ def title_or_description_warnings(
 
 
 def weak_alt_text_reason(alt: str) -> str:
-    text = (alt or "").strip()
+    text = unicodedata.normalize("NFC", (alt or "").strip())
     if not text:
         return ""
     lowered = text.lower()
     words = re.findall(r"[A-Za-zÄÖÜäöüß0-9]+", text)
-    if text.startswith("FamilySurprise-"):
+    if re.match(r"family[\s_-]?surprise[\s_-]*[-_]", text, re.IGNORECASE):
         return "brand-prefix or filename-like value"
-    if re.search(r"\b[a-z]+-[a-z0-9-]+\b", lowered) and " " not in text:
+    if re.search(r"\.(?:jpe?g|png|webp|avif|heic)(?:$|[?#])", lowered) or re.match(
+        r"(?:chatgpt image|screenshot|bildschirmfoto|whatsapp image)\b", lowered
+    ):
+        return "image filename or export label"
+    if re.fullmatch(r"\d+|[0-9a-f]{12,}", lowered):
+        return "numeric or opaque identifier"
+    if not re.search(r"\s", text) and re.search(r"[-_]", text):
         return "hyphenated slug-like value"
+    if len(words) == 1:
+        return "single word; check whether it describes the specific image"
     if len(words) <= 3 and any(term in lowered for term in ["hoodie", "shirt", "cap", "glas", "armband"]):
         return "too generic for an optimized product alt"
     if "rosafarbenes" in lowered:

@@ -9,7 +9,7 @@ description: Audit and improve Shopify product CSVs for SEO. Generate titles, de
 
 1. Audit the source CSV before editing.
    - Run `scripts/shopify_csv_guard.py audit <csv> --output <report.md>`.
-   - Report product count, row count, missing SEO fields, missing/duplicated alt text, empty `Body (HTML)`, drafts, B2B products, and excluded-search tags.
+   - Review `image_alt_review` in the JSON audit for missing captions, extensionless filenames and other weak labels. Report product count, row count, missing SEO fields, image findings, empty descriptions, drafts, B2B products and excluded-search tags.
    - Explain that Shopify product exports can have multiple rows per product because variants/images share a `Handle`.
 
 For approved changes to existing descriptions, current image captions or FamilySurprise product brands, use [the product content workflow](references/catalog-content.md). It supports verification against an explicit plan and the fresh export. Existing authorization covers the choices the user has already made.
@@ -36,7 +36,8 @@ For approved changes to existing descriptions, current image captions or FamilyS
    - Use UTF-8 and normal CSV quoting.
 
 5. Validate before delivery.
-   - Run `scripts/shopify_csv_guard.py validate <original.csv> <updated.csv> --output <validation.md>`.
+   - For changes limited to the default SEO fields, run `scripts/shopify_csv_guard.py validate <original.csv> <updated.csv> --output <validation.md>`.
+   - For approved introductions, public brand or reviewed image plans, run `scripts/catalog_content.py <original.csv> <plan.json> --verify <updated.csv>`. This checks the approved edits and every protected cell.
    - If empty body copy was explicitly allowed, add `--allow-empty-body-html`.
    - Treat any protected-field change as a blocker.
    - Read and summarize the validation report before handing off the CSV.
