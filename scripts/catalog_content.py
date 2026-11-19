@@ -73,15 +73,16 @@ def apply_plan(columns, rows, plan):
             prefix = f"<p>{html.escape(intro, quote=False)}</p>\n"
             current = parent[idx]
             if digest(current) == edits.get("body_sha256"):
-                parent[idx] = prefix + current
-                counts["introductions"] += 1
+                if not current.startswith(prefix):
+                    parent[idx] = prefix + current
+                    counts["introductions"] += 1
             elif not (current.startswith(prefix) and digest(current[len(prefix):]) == edits.get("body_sha256")):
                 raise ValueError(f"{name}: original description has changed")
         if "brand" in edits or "expected_brand" in edits:
             keys = [key for key in columns if key == "product.metafields.custom.produktmarke" or key.endswith(" (product.metafields.custom.produktmarke)")]
             idx = column(columns, *keys)
             value = checked_text(edits.get("brand"), name)
-            if "expected_brand" not in edits or parent[idx] not in (edits["expected_brand"], value):
+            if not isinstance(edits.get("expected_brand"), str) or parent[idx] not in (edits["expected_brand"], value):
                 raise ValueError(f"{name}: brand source has changed")
             if parent[idx] != value:
                 parent[idx] = value
@@ -93,7 +94,7 @@ def apply_plan(columns, rows, plan):
             if not isinstance(images, dict):
                 raise ValueError(f"{name}: images must be keyed by the current media URL")
             for url, edit in images.items():
-                if not url or not isinstance(edit, dict) or set(edit) != {"expected_alt", "alt"}:
+                if not url or not isinstance(edit, dict) or set(edit) != {"expected_alt", "alt"} or not isinstance(edit["expected_alt"], str):
                     raise ValueError(f"{name}: malformed image edit")
                 matches = [row for row in groups[name] if row[src] == url]
                 if len(matches) != 1:

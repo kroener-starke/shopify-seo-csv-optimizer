@@ -24,6 +24,8 @@ class CatalogContentTest(unittest.TestCase):
         self.assertEqual(self.rows[1][:6], before[1][:6])
         self.assertEqual(self.rows[2], before[2])
         self.assertEqual(apply_plan(self.cols, self.rows, self.plan), {})
+        self.plan["products"]["a"]["body_sha256"] = digest(self.rows[0][2])
+        self.assertEqual(apply_plan(self.cols, self.rows, self.plan), {})
 
     def test_changed_input_or_ambiguous_image_refused(self):
         for field, value in [(2, self.html + " Neu"), (5, "two"), (7, "Different")]:
