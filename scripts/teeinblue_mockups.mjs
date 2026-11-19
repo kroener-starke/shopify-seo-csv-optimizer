@@ -65,12 +65,29 @@ export async function syncOpenCampaign(tab, {handle, campaignPath, shopHosts, pl
     if (await card.count() !== 1) throw new Error('The source mockup has changed.');
     const editor = card.getByRole('button', {name: /^Edit .*/});
     const altButton = page.getByRole('button', {name: /Alt text/});
-    await editor.click({timeoutMs: 16000});
     try {
-      await altButton.waitFor({state: 'visible', timeoutMs: 8000});
+      await editor.click({timeoutMs: 12000});
+      await altButton.waitFor({state: 'visible', timeoutMs: 3500});
     } catch (error) {
-      if (await editor.count() !== 1 || await altButton.count()) throw error;
-      await editor.press('Enter');
+      if (await editor.count() !== 1) throw error;
+      if (!await altButton.count()) {
+        if (tab.ax) {
+          const lines = (await tab.ax.get('state', {disableDiffing: true})).split('\n');
+          const group = lines.findIndex(line => new RegExp('^\\t*\\d+ container ' + image.id + '$').test(line));
+          if (group < 0) throw new Error('The original photo is missing from the accessible gallery.');
+          const depth = lines[group].match(/^\t*/)[0].length;
+          const controls = [];
+          for (const line of lines.slice(group + 1)) {
+            if (line.match(/^\t*/)[0].length <= depth) break;
+            const match = line.match(/^\t*(\d+) button Edit(?:\s+)?(?:,.*)?$/);
+            if (match) controls.push(Number(match[1]));
+          }
+          if (controls.length !== 1) throw new Error('Could not identify a unique editor for ' + image.id);
+          await tab.ax.click(controls[0]);
+        } else {
+          await editor.press('Enter');
+        }
+      }
     }
     await altButton.click({timeoutMs: 16000});
     const box = page.getByRole('dialog').getByRole('textbox', {name: '', exact: true});
