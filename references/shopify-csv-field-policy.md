@@ -18,7 +18,7 @@ These fields can affect the visible shop, collection behavior, feeds, or taxonom
 
 | Field | Rule |
 |---|---|
-| `Body (HTML)` | Fill only when empty and only after permission. Existing body copy must not be overwritten by default. |
+| `Body (HTML)` | FamilySurprise optimization includes factual introductions on similar active listings, preserving the original HTML. Filling an empty body or rewriting existing copy requires separate authorization. |
 | `Tags` | Use as context by default. Edit only when the user asks for tag cleanup/enrichment. |
 | `Product Category` | Use as context by default. Edit only with a taxonomy plan. |
 | `Google Shopping / Google Product Category` | Edit only with a validated category mapping. |
@@ -26,8 +26,8 @@ These fields can affect the visible shop, collection behavior, feeds, or taxonom
 Also ask before optimizing:
 
 - Draft products: `Status != active` or `Published != true`.
-- B2B/shop-in-shop products: `B2B (product.metafields.custom.b2b) = TRUE`.
-- Products tagged `exclude-search`, `exlude-search`, or similar.
+- B2B/shop-in-shop products outside the approved FamilySurprise scope: `B2B (product.metafields.custom.b2b) = TRUE`.
+- Products outside that scope tagged `exclude-search`, `exlude-search`, or similar.
 
 ## Context-Only Fields
 

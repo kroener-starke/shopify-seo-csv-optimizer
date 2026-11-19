@@ -1,6 +1,6 @@
 ---
 name: shopify-seo-csv-optimizer
-description: Audit and improve Shopify product CSVs for SEO. Generate titles, descriptions and image alt text. When requested, differentiate existing product copy with fact-based introductions and set the FamilySurprise public product brand. Validate every cell against the approved edits while preserving variants and supplier data.
+description: Audit and improve Shopify product CSVs for SEO. Generate titles, descriptions and image alt text. Detect duplicate and similar product descriptions. Add factual introductions in FamilySurprise optimization runs and set an approved public brand. Validate every cell against the approved edits while preserving variants and supplier data.
 ---
 
 # Shopify SEO CSV Optimizer
@@ -9,16 +9,17 @@ description: Audit and improve Shopify product CSVs for SEO. Generate titles, de
 
 1. Audit the source CSV before editing.
    - Run `scripts/shopify_csv_guard.py audit <csv> --output <report.md>`.
+   - Use the full current export when checking descriptions across the catalog. Review the matched handles in `description_review.review` (JSON via `--format json`) and their example siblings. The audit reads all products, including drafts.
    - Review `image_alt_review` in the JSON audit for missing captions, extensionless filenames and other weak labels. Report product count, row count, missing SEO fields, image findings, empty descriptions, drafts, B2B products and excluded-search tags.
    - Explain that Shopify product exports can have multiple rows per product because variants/images share a `Handle`.
 
-For approved changes to existing descriptions, current image captions or FamilySurprise product brands, use [the product content workflow](references/catalog-content.md). It supports verification against an explicit plan and the fresh export. Existing authorization covers the choices the user has already made.
+For a FamilySurprise optimization, the agreed scope includes factual introductions for similar descriptions across active products, including partner shops. Write the introductions and create the validated CSV as part of the run unless the user narrows the scope. An audit-only request ends with the report. Follow [the product content workflow](references/catalog-content.md) for introductions, public brand and reviewed image captions.
 
 2. Ask before changing anything outside the default editable fields.
-   - Ask all required workflow questions together immediately after the audit, so the user can answer once and the optimization can then run uninterrupted.
+   - Ask only unresolved workflow questions, together after the audit, so the user can answer once and the optimization can then run uninterrupted.
    - Default editable fields: `SEO Title`, `SEO Description`, `Image Alt Text`.
    - Ask before filling empty `Body (HTML)`. Never overwrite existing body copy unless the user explicitly asks.
-   - Ask before optimizing draft products, B2B/shop-in-shop products, tags, product categories, or Google Shopping categories.
+   - For other stores, obtain approval before adding introductions or editing B2B products. Confirm draft, tag and category changes when relevant.
    - Ask whether to use image inspection for alt text:
      - Table-only mode is faster and cheaper but must be more generic.
      - Image-inspection mode uses the `Image Src` links, needs more time/tokens, and can create more visually precise alt text.
@@ -49,7 +50,8 @@ Read `references/shopify-csv-field-policy.md` when classifying columns or decidi
 Use these defaults:
 
 - Change by default: `SEO Title`, `SEO Description`, `Image Alt Text`.
-- Ask first: `Body (HTML)`, `Tags`, `Product Category`, `Google Shopping / Google Product Category`.
+- Covered for FamilySurprise: a factual opening paragraph when warranted on an active product. Preserve the entire original body after it.
+- Ask first for other changes to `Body (HTML)`, `Tags`, `Product Category`, `Google Shopping / Google Product Category`.
 - Preserve by default: every other column, including unknown columns.
 
 ## SEO Rules

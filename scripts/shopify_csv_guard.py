@@ -12,6 +12,8 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from description_review import review_descriptions
+
 
 DEFAULT_EDITABLE = {"SEO Title", "SEO Description", "Image Alt Text"}
 ASK_FIRST = {
@@ -77,7 +79,7 @@ def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]], csv.Dialect]:
 def product_groups(rows: list[dict[str, str]]) -> collections.OrderedDict[str, list[tuple[int, dict[str, str]]]]:
     groups: collections.OrderedDict[str, list[tuple[int, dict[str, str]]]] = collections.OrderedDict()
     for offset, row in enumerate(rows, start=2):
-        handle = row.get("Handle", "")
+        handle = row.get("Handle", row.get("URL handle", ""))
         groups.setdefault(handle, []).append((offset, row))
     return groups
 
@@ -137,7 +139,8 @@ def audit_data(path: Path) -> dict[str, object]:
     groups = product_groups(rows)
     products = [product_row(items) for items in groups.values()]
     image_rows = [row for row in rows if nonempty(row.get("Image Src", ""))]
-    empty_body = [row.get("Handle", "") for row in products if not nonempty(row.get("Body (HTML)", ""))]
+    descriptions = review_descriptions(products)
+    empty_body = descriptions["empty"]
     missing_seo_title = [row.get("Handle", "") for row in products if not nonempty(row.get("SEO Title", ""))]
     missing_seo_description = [
         row.get("Handle", "") for row in products if not nonempty(row.get("SEO Description", ""))
@@ -189,6 +192,7 @@ def audit_data(path: Path) -> dict[str, object]:
         "product_count": len(groups),
         "image_row_count": len(image_rows),
         "image_alt_review": image_alt_review,
+        "description_review": descriptions,
         "missing": {
             "seo_title_products": missing_seo_title,
             "seo_description_products": missing_seo_description,
@@ -244,6 +248,9 @@ def render_audit_markdown(data: dict[str, object]) -> str:
         f"- Image rows missing `Image Alt Text`: {missing['image_alt_text_rows']}",
         f"- Images flagged for caption review (including missing captions): {len(data['image_alt_review'])}",
         "",
+        f"- Product descriptions to compare: {len(data['description_review']['review'])}",
+        f"- Individual introductions on shared descriptions: {len(data['description_review']['distinct_openings_on_shared_copy'])}",
+        "",
         "## Product Groups Needing Decisions",
         "",
         f"- B2B products: {counts['b2b_products']}",
@@ -251,6 +258,12 @@ def render_audit_markdown(data: dict[str, object]) -> str:
         f"- Excluded-search tagged products: {counts['excluded_search_products']}",
         "",
     ]
+    if data["description_review"]["review"]:
+        lines.extend(["### Product descriptions to compare", ""])
+        for item in data["description_review"]["review"]:
+            lines.append(f"- `{item['handle']}` — {item['reason']} (compare `{item['example']}`).")
+        lines.append("")
+
     for label, key in [
         ("Empty Body (HTML)", "body_html_products"),
         ("B2B", "b2b"),

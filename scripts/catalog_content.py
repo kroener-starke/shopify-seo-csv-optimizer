@@ -57,8 +57,11 @@ def apply_plan(columns, rows, plan):
     groups = defaultdict(list)
     for row in rows:
         groups[row[handle]].append(row)
-    if not isinstance(plan, dict) or set(plan) != {"products"} or not isinstance(plan["products"], dict):
+    if not isinstance(plan, dict) or set(plan) - {"products", "version"} or not isinstance(plan.get("products"), dict):
         raise ValueError("expected an object containing products keyed by handle")
+    version = plan.get("version", 1)
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("unsupported plan version")
     counts = defaultdict(int)
     for name, edits in plan["products"].items():
         if not isinstance(edits, dict) or not edits or set(edits) - {"introduction", "body_sha256", "brand", "expected_brand", "images"}:
@@ -70,9 +73,15 @@ def apply_plan(columns, rows, plan):
         if "introduction" in edits or "body_sha256" in edits:
             idx = column(columns, "Body (HTML)", "Description")
             intro = checked_text(edits.get("introduction"), name)
-            prefix = f"<p>{html.escape(intro, quote=False)}</p>\n"
+            escaped = html.escape(intro, quote=False)
+            legacy_prefix = f"<p>{escaped}</p>\n"
+            prefix = legacy_prefix if version == 1 else f'<p class="fs-product-intro">{escaped}</p>\n'
             current = parent[idx]
-            if digest(current) == edits.get("body_sha256"):
+            if (version == 2 and current.startswith(legacy_prefix)
+                    and edits.get("body_sha256") in (digest(current[len(legacy_prefix):]), digest(current))):
+                parent[idx] = prefix + current[len(legacy_prefix):]
+                counts["marked_existing_introductions"] += 1
+            elif digest(current) == edits.get("body_sha256"):
                 if not current.startswith(prefix):
                     parent[idx] = prefix + current
                     counts["introductions"] += 1

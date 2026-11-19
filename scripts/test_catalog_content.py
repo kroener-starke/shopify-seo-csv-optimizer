@@ -54,6 +54,17 @@ class CatalogContentTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "unrelated edits"):
                     main()
 
+    def test_current_format_marks_new_and_migrated_introductions_without_changing_original(self):
+        legacy_rows = copy.deepcopy(self.rows)
+        apply_plan(self.cols, legacy_rows, self.plan)
+        self.plan["version"] = 2
+        apply_plan(self.cols, self.rows, self.plan)
+        expected = '<p class="fs-product-intro">Motiv A &amp; B</p>\n' + self.html
+        self.assertEqual(self.rows[0][2], expected)
+        self.assertEqual(apply_plan(self.cols, legacy_rows, self.plan), {"marked_existing_introductions": 1})
+        self.assertEqual(legacy_rows, self.rows)
+        self.assertEqual(apply_plan(self.cols, self.rows, self.plan), {})
+
     def test_unknown_fields_and_missing_product_refused(self):
         for plan in ({"products": {"a": {"Vendor": "Other"}}}, {"products": {"gone": {"brand": "x"}}}):
             with self.assertRaises(ValueError):
